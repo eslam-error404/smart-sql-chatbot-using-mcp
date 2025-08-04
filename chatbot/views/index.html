@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SQL Chatbot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .chat-container { height: calc(100vh - 120px); }
+    .message-bubble { max-width: 80%; word-wrap: break-word; }
+    .user-message { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .bot-message { background: #f8f9fa; border: 1px solid #e9ecef; }
+    .typing-indicator::after {
+      content: '';
+      animation: typing 1.4s infinite;
+    }
+    @keyframes typing {
+      0%, 20% { content: ''; }
+      40% { content: '.'; }
+      60% { content: '..'; }
+      80%, 100% { content: '...'; }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 h-screen">
+  <div class="flex flex-col h-full">
+    <!-- Header -->
+    <div class="bg-white border-b border-gray-200 px-6 py-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-lg font-semibold text-gray-900">SQL Assistant</h1>
+            <p class="text-sm text-gray-500">Ask questions about your sales data</p>
+          </div>
+        </div>
+        <div id="status" class="text-sm text-gray-500"></div>
+      </div>
+    </div>
+
+    <!-- Chat Messages -->
+    <div id="chatMessages" class="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+      <!-- Welcome Message -->
+      <div class="flex justify-start">
+        <div class="message-bubble bot-message rounded-2xl px-4 py-3">
+          <div class="flex items-start space-x-3">
+            <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex-shrink-0 flex items-center justify-center">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+              </svg>
+            </div>
+            <div>
+              <p class="text-gray-800">Hello! I'm your SQL assistant. I can help you analyze your sales data. Try asking questions like:</p>
+              <ul class="mt-2 text-sm text-gray-600 space-y-1">
+                <li>• "Show me all sales data"</li>
+                <li>• "What's the total revenue?"</li>
+                <li>• "Find the highest sale"</li>
+                <li>• "How many sales records do we have?"</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input Area -->
+    <div class="bg-white border-t border-gray-200 px-6 py-4">
+      <div class="flex items-end space-x-3">
+        <div class="flex-1">
+          <textarea 
+            id="messageInput" 
+            class="w-full border border-gray-300 rounded-2xl px-4 py-3 resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            placeholder="Ask a question about your sales data..."
+            rows="1"
+            maxlength="500"
+          ></textarea>
+          <div class="mt-1 text-xs text-gray-500 text-right">
+            <span id="charCount">0</span>/500
+          </div>
+        </div>
+        <button 
+          id="sendButton"
+          class="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-2xl hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+          </svg>
+          <span>Send</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const messageInput = document.getElementById('messageInput');
+    const sendButton = document.getElementById('sendButton');
+    const chatMessages = document.getElementById('chatMessages');
+    const charCount = document.getElementById('charCount');
+    const statusDiv = document.getElementById('status');
+
+    let isProcessing = false;
+
+    // Auto-resize textarea
+    messageInput.addEventListener('input', () => {
+      messageInput.style.height = 'auto';
+      messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+      
+      const count = messageInput.value.length;
+      charCount.textContent = count;
+      charCount.className = count > 450 ? 'text-red-500' : 'text-gray-500';
+    });
+
+    // Send message on Enter
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && !isProcessing) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // Send button click
+    sendButton.addEventListener('click', () => {
+      if (!isProcessing) {
+        sendMessage();
+      }
+    });
+
+    function addMessage(content, isUser = false, showTyping = false) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `flex ${isUser ? 'justify-end' : 'justify-start'}`;
+      
+      const bubbleClass = isUser ? 'user-message text-white' : 'bot-message text-gray-800';
+      
+      if (isUser) {
+        messageDiv.innerHTML = `
+          <div class="message-bubble ${bubbleClass} rounded-2xl px-4 py-3">
+            <div class="flex items-start space-x-3">
+              <div class="flex-1">
+                <div class="whitespace-pre-wrap">${content}</div>
+              </div>
+              <div class="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex-shrink-0 flex items-center justify-center">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                </svg>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        messageDiv.innerHTML = `
+          <div class="message-bubble ${bubbleClass} rounded-2xl px-4 py-3">
+            <div class="flex items-start space-x-3">
+              <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex-shrink-0 flex items-center justify-center">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                </svg>
+              </div>
+              <div class="flex-1">
+                ${showTyping ? 
+                  `<div class="typing-indicator">Thinking</div>` : 
+                  `<div class="whitespace-pre-wrap">${content}</div>`
+                }
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      
+      chatMessages.appendChild(messageDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+      return messageDiv;
+    }
+
+    async function sendMessage() {
+      const message = messageInput.value.trim();
+      if (!message || isProcessing) return;
+
+      isProcessing = true;
+      sendButton.disabled = true;
+      messageInput.disabled = true;
+
+      // Add user message
+      addMessage(message, true);
+      messageInput.value = '';
+      messageInput.style.height = 'auto';
+      charCount.textContent = '0';
+
+      // Add typing indicator
+      const typingMessage = addMessage('', false, true);
+
+      try {
+        const response = await fetch('/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userQuery: message })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Remove typing indicator
+        typingMessage.remove();
+
+        // Add bot response
+        addMessage(data.response, false);
+
+      } catch (error) {
+        console.error('Error:', error);
+        
+        // Remove typing indicator
+        typingMessage.remove();
+
+        // Add error message
+        const errorMessage = error.name === 'TypeError' && error.message.includes('fetch') 
+          ? 'Network error. Please check your connection and try again.'
+          : `Error: ${error.message}`;
+        
+        addMessage(errorMessage, false);
+      } finally {
+        isProcessing = false;
+        sendButton.disabled = false;
+        messageInput.disabled = false;
+        messageInput.focus();
+      }
+    }
+
+    // Health check on page load
+    window.addEventListener('load', async () => {
+      try {
+        const response = await fetch('/health');
+        if (response.ok) {
+          statusDiv.innerHTML = `<span class="text-green-600">✓ Ready</span>`;
+        } else {
+          statusDiv.innerHTML = `<span class="text-yellow-600">⚠ Slow</span>`;
+        }
+      } catch (error) {
+        statusDiv.innerHTML = `<span class="text-red-600">✗ Offline</span>`;
+      }
+    });
+  </script>
+</body>
+</html>
