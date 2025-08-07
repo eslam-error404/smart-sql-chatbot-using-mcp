@@ -23,7 +23,7 @@ Before running this application, make sure you have:
 
 ### 1. Clone the Repository
 ```bash
-git clone [<your-repository-url>](https://github.com/eslam-error404/smart-sql-chatbot-using-mcp)
+git clone https://github.com/eslam-error404/smart-sql-chatbot-using-mcp
 cd chatbot-sql-mcp
 ```
 
